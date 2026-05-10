@@ -1,0 +1,13 @@
+build/
+
+*.edt
+
+repetitive.txt
+natural.txt
+
+repetitive_zlib.edt
+repetitive_rle.edt
+
+natural_zlib.edt
+natural_rle.edt
+
