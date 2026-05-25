@@ -1,6 +1,7 @@
 build/
 
 *.edt
+*.txt
 
 repetitive.txt
 natural.txt
