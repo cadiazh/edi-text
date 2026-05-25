@@ -1,9 +1,8 @@
-````md id="9qysf9"
-# EDI-TEXT
+# EDI-TEXT v5.0
 
-Editor de texto minimalista desarrollado en C para Linux utilizando llamadas POSIX directas, manejo dinámico de memoria y compresión en User Space.
+Editor de texto minimalista desarrollado en C para Linux utilizando llamadas POSIX directas, manejo dinámico de memoria, compresión en User Space y cifrado simétrico RC4.
 
-El proyecto fue diseñado para analizar el impacto de distintos algoritmos de compresión sobre el subsistema I/O de Linux, comparando rendimiento, cantidad de syscalls y tamaño final de los archivos.
+El proyecto fue diseñado para analizar el impacto de la compresión y la seguridad criptográfica sobre el subsistema I/O de Linux, comparando rendimiento, uso de CPU, syscalls y tamaño final de los archivos.
 
 ---
 
@@ -26,9 +25,13 @@ El proyecto fue diseñado para analizar el impacto de distintos algoritmos de co
   - zlib
   - RLE (Run-Length Encoding)
 
+- Cifrado simétrico RC4
+
 - Formato binario personalizado (`.edt`)
 
 - Carga optimizada utilizando `mmap()`
+
+- Eliminación segura de llaves desde RAM
 
 - Benchmarking y profiling usando:
   - `strace`
@@ -47,12 +50,14 @@ edi-text/
 ├── include/
 │   ├── buffer.h
 │   ├── compression.h
+│   ├── crypto.h
 │   └── io.h
 │
 ├── src/
 │   ├── benchmark_main.c
 │   ├── buffer.c
 │   ├── compression.c
+│   ├── crypto.c
 │   ├── io.c
 │   └── main.c
 │
@@ -100,6 +105,8 @@ TextBuffer (RAM)
 ↓
 Compresión
 ↓
+Encriptación RC4
+↓
 Header binario
 ↓
 write() POSIX
@@ -115,6 +122,8 @@ Archivo .edt
 read() / mmap()
 ↓
 Lectura de Header
+↓
+Desencriptación RC4
 ↓
 Descompresión
 ↓
@@ -145,6 +154,14 @@ El buffer crece dinámicamente utilizando `realloc()` conforme el usuario escrib
 
 Toda la memoria es liberada correctamente al finalizar la ejecución.
 
+Las llaves criptográficas son eliminadas utilizando:
+
+```c
+secure_zero()
+```
+
+para evitar residuos sensibles en memoria RAM.
+
 ---
 
 # Formato binario
@@ -152,7 +169,7 @@ Toda la memoria es liberada correctamente al finalizar la ejecución.
 Los archivos `.edt` utilizan un formato binario personalizado:
 
 ```text
-[HEADER][PAYLOAD COMPRESSED]
+[HEADER][PAYLOAD COMPRESSED + ENCRYPTED]
 ```
 
 Header utilizado:
@@ -217,25 +234,45 @@ Algoritmo implementado manualmente en C.
 
 ---
 
+# Cifrado
+
+## RC4
+
+Stream cipher simétrico implementado en C.
+
+### Ventajas
+
+- Muy ligero
+- Bajo overhead
+- No requiere padding
+- Mantiene el tamaño comprimido
+
+### Seguridad implementada
+
+- La llave se solicita por consola
+- La llave no está hardcodeada
+- La llave es eliminada de RAM usando `secure_zero()`
+
+---
+
 # Benchmarking
 
 ## Dataset repetitivo
 
 Archivo original: `15 MB`
 
-| Métrica | zlib | RLE |
-|---|---|---|
-| Archivo final | 37 KB | 2 MB |
-| real | 0.100s | 0.066s |
-| user | 0.090s | 0.052s |
-| sys | 0.010s | 0.014s |
-| write() | 12 | 491 |
+| Pipeline | Tamaño Final | real | user | sys |
+|---|---|---|---|---|
+| Plano | 15 MB | 0.049s | 0.012s | 0.025s |
+| Compresión | 37 KB | 0.141s | 0.127s | 0.013s |
+| Compresión + RC4 | 37 KB | 0.143s | 0.131s | 0.010s |
 
 ### Conclusión
 
-- RLE fue más rápido.
-- zlib obtuvo mucha mejor compresión.
-- zlib redujo drásticamente las syscalls `write()`.
+- La compresión redujo drásticamente el tamaño físico.
+- RC4 agregó un overhead mínimo.
+- El tiempo kernel (`sys`) disminuyó significativamente.
+- El sistema redujo presión sobre el bus I/O.
 
 ---
 
@@ -243,31 +280,39 @@ Archivo original: `15 MB`
 
 Archivo original: `58 MB`
 
-| Métrica | zlib | RLE |
-|---|---|---|
-| Archivo final | 200 KB | 115 MB |
-| real | 0.350s | 0.596s |
-| user | 0.332s | 0.356s |
-| sys | 0.017s | 0.237s |
+| Pipeline | Tamaño Final | real | user | sys |
+|---|---|---|---|---|
+| Plano | 58 MB | 0.139s | 0.034s | 0.075s |
+| Compresión | 200 KB | 0.510s | 0.485s | 0.024s |
+| Compresión + RC4 | 200 KB | 0.510s | 0.481s | 0.024s |
 
 ### Conclusión
 
 - zlib mantuvo una excelente compresión.
-- RLE empeoró significativamente el tamaño final.
-- RLE incrementó el tiempo en modo kernel (`sys`).
+- RC4 no destruyó la compresión ya aplicada.
+- El sistema redujo significativamente el tráfico I/O.
+- El costo adicional de RC4 fue mínimo.
 
 ---
 
 # Resultados y análisis
 
-Los resultados demostraron que invertir ciclos de CPU en User Space mediante compresión puede reducir considerablemente:
+Los resultados demostraron que invertir ciclos de CPU en User Space mediante compresión y cifrado puede reducir considerablemente:
 
 - tráfico I/O
 - tamaño físico de los archivos
 - presión sobre el kernel
-- cantidad de syscalls `write()`
+- tiempo en modo kernel (`sys`)
 
-También se observó que la eficiencia de un algoritmo depende directamente del tipo de datos procesados.
+También se comprobó que:
+
+```text
+compress → encrypt
+```
+
+es el orden correcto del pipeline.
+
+Encriptar antes de comprimir genera alta entropía, haciendo imposible detectar patrones repetitivos y destruyendo la efectividad de la compresión.
 
 ---
 
@@ -302,7 +347,7 @@ All heap blocks were freed -- no leaks are possible
 Ejemplo de profiling:
 
 ```bash
-strace -c ./build/benchmark repetitive.txt repetitive_zlib.edt 1
+strace -c ./build/benchmark natural.txt natural_secure.edt 2 1
 ```
 
 ---
@@ -314,6 +359,7 @@ strace -c ./build/benchmark repetitive.txt repetitive_zlib.edt 1
 ```text
 1
 archivo.edt
+miclave
 ```
 
 Seleccionar algoritmo:
@@ -336,11 +382,27 @@ Guardar:
 ```text
 2
 archivo.edt
+miclave
 ```
+
+---
+
+# Conceptos de Sistemas Operativos Aplicados
+
+- User Space vs Kernel Space
+- Optimización del bus I/O
+- Syscalls POSIX
+- Buffers de memoria
+- Memoria dinámica
+- Compresión de datos
+- Entropía y cifrado
+- Seguridad en RAM
+- Context switches
+- Profiling de procesos
+- Cifrado simétrico
 
 ---
 
 # Autor
 
 Arturo
-````

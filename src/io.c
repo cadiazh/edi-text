@@ -2,25 +2,44 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include <sys/mman.h>
 #include <sys/stat.h>
 
 #include "../include/io.h"
 #include "../include/compression.h"
+#include "../include/crypto.h"
 
 #define FILE_PERMISSIONS 0644
 #define BLOCK_SIZE 4096
 
+void secure_zero(
+    void *ptr,
+    size_t len
+) {
+
+    volatile unsigned char *p = ptr;
+
+    while (len--) {
+
+        *p++ = 0;
+    }
+}
+
 int save_file(
     const char *filename,
     TextBuffer *buffer,
-    uint32_t algorithm
+    uint32_t algorithm,
+    unsigned char *key,
+    int use_encryption
 ) {
 
     unsigned char *compressed_data = NULL;
 
     size_t compressed_size = 0;
+
+    RC4State rc4_state;
 
     if (algorithm == ALGO_ZLIB) {
 
@@ -32,6 +51,11 @@ int save_file(
                 &compressed_size
             ) != 0
         ) {
+
+            secure_zero(
+                key,
+                sizeof(key)
+            );
 
             return -1;
         }
@@ -48,15 +72,39 @@ int save_file(
             ) != 0
         ) {
 
+            secure_zero(
+                key,
+                sizeof(key)
+            );
+
             return -1;
         }
 
     }
     else {
 
+        secure_zero(
+            key,
+            sizeof(key)
+        );
+
         return -1;
     }
 
+    if (use_encryption) {
+
+        rc4_init(
+            &rc4_state,
+            key,
+            strlen((char *)key)
+        );
+
+        rc4_crypt(
+            &rc4_state,
+            compressed_data,
+            compressed_size
+        );
+    }
     int fd = open(
         filename,
         O_WRONLY | O_CREAT | O_TRUNC,
@@ -64,6 +112,11 @@ int save_file(
     );
 
     if (fd < 0) {
+
+        secure_zero(
+            key,
+            sizeof(key)
+        );
 
         free(compressed_data);
 
@@ -87,6 +140,11 @@ int save_file(
     );
 
     if (header_written != sizeof(FileHeader)) {
+
+        secure_zero(
+            key,
+            sizeof(key)
+        );
 
         free(compressed_data);
 
@@ -115,6 +173,11 @@ int save_file(
 
         if (bytes_written < 0) {
 
+            secure_zero(
+                key,
+                sizeof(key)
+            );
+
             free(compressed_data);
 
             close(fd);
@@ -125,6 +188,11 @@ int save_file(
         total_written += bytes_written;
     }
 
+    secure_zero(
+        key,
+        sizeof(key)
+    );
+
     free(compressed_data);
 
     close(fd);
@@ -134,7 +202,9 @@ int save_file(
 
 int load_file(
     const char *filename,
-    TextBuffer *buffer
+    TextBuffer *buffer,
+    unsigned char *key,
+    int use_encryption
 ) {
 
     int fd = open(filename, O_RDONLY);
@@ -197,6 +267,23 @@ int load_file(
         total_read += bytes_read;
     }
 
+
+    RC4State rc4_state;
+
+    if (use_encryption) {
+
+        rc4_init(
+            &rc4_state,
+            key,
+            strlen((char *)key)
+        );
+
+        rc4_crypt(
+            &rc4_state,
+            compressed_data,
+            header.compressed_size
+        );
+    }
     char *decompressed_data = NULL;
 
     if (header.algorithm == ALGO_ZLIB) {

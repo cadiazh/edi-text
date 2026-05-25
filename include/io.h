@@ -23,12 +23,16 @@ typedef struct __attribute__((packed)) {
 int save_file(
     const char *filename,
     TextBuffer *buffer,
-    uint32_t algorithm
+    uint32_t algorithm,
+    unsigned char *key,
+    int use_encryption
 );
 
 int load_file(
     const char *filename,
-    TextBuffer *buffer
+    TextBuffer *buffer,
+    unsigned char *key,
+    int use_encryption
 );
 
 int load_plain_text(

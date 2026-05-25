@@ -2,9 +2,14 @@ CC = gcc
 
 CFLAGS = -Wall -Wextra -pedantic -std=c11
 
-SRC = src/main.c src/buffer.c src/io.c src/compression.c
+SRC = src/main.c \
+	src/buffer.c \
+	src/io.c \
+	src/compression.c \
+	src/crypto.c
 
 OUT = build/editor
+
 BENCH = build/benchmark
 
 all:
@@ -18,6 +23,7 @@ benchmark:
 	src/buffer.c \
 	src/io.c \
 	src/compression.c \
+	src/crypto.c \
 	-o $(BENCH) -lz
 
 run: all

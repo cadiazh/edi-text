@@ -1,16 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "../include/buffer.h"
 #include "../include/io.h"
+#include "../include/crypto.h"
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 4) {
+    if (argc != 5) {
 
         printf(
-            "Uso:\n%s <input.txt> <output.edt> <algorithm>\n",
+            "Uso:\n%s <input> <output> <mode> <algorithm>\n",
             argv[0]
         );
 
@@ -21,7 +23,11 @@ int main(int argc, char *argv[]) {
 
     const char *output_file = argv[2];
 
-    uint32_t algorithm = atoi(argv[3]);
+    int mode = atoi(argv[3]);
+
+    uint32_t algorithm = atoi(argv[4]);
+
+    unsigned char key[] = "benchmarkkey";
 
     TextBuffer buffer;
 
@@ -41,24 +47,75 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (
-        save_file(
-            output_file,
-            &buffer,
-            algorithm
-        ) != 0
-    ) {
+    if (mode == 0) {
 
-        printf("Error guardando archivo.\n");
+        FILE *f = fopen(output_file, "w");
 
-        buffer_free(&buffer);
+        if (!f) {
 
-        return 1;
+            buffer_free(&buffer);
+
+            return 1;
+        }
+
+        fwrite(
+            buffer.data,
+            1,
+            buffer.length,
+            f
+        );
+
+        fclose(f);
     }
 
-    printf("Benchmark completado.\n");
+    else if (mode == 1) {
+
+        if (
+            save_file(
+                output_file,
+                &buffer,
+                algorithm,
+                key,
+                0
+            ) != 0
+        ) {
+
+            printf("Error guardando.\n");
+
+            buffer_free(&buffer);
+
+            return 1;
+        }
+    }
+
+    else if (mode == 2) {
+
+        if (
+            save_file(
+                output_file,
+                &buffer,
+                algorithm,
+                key,
+                1
+            ) != 0
+        ) {
+
+            printf("Error guardando.\n");
+
+            buffer_free(&buffer);
+
+            return 1;
+        }
+    }
+
+    secure_zero(
+        key,
+        sizeof(key)
+    );
 
     buffer_free(&buffer);
+
+    printf("Benchmark completado.\n");
 
     return 0;
 }
