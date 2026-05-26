@@ -5,7 +5,11 @@ Editor de texto minimalista desarrollado en C para Linux utilizando llamadas POS
 El proyecto fue diseñado para analizar el impacto de la compresión y la seguridad criptográfica sobre el subsistema I/O de Linux, comparando rendimiento, uso de CPU, syscalls y tamaño final de los archivos.
 
 ---
+# Video explicativo
 
+-link del video: [Editor de Texto en C](https://youtu.be/frBT35r6HW0)
+
+---
 # Características
 
 - Manejo dinámico de memoria con:
@@ -404,5 +408,4 @@ miclave
 ---
 
 # Autor
-
 Arturo
